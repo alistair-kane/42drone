@@ -1,8 +1,9 @@
+from numpy import NaN
 from pymavlink import mavutil
-from marvelmind import MarvelMindHedge
+from marvelmind import MarvelmindHedge
 import sys
 
-def send_gps_data(time, q[4], x, y, z):
+def send_gps_data(time, q, x, y, z):
 	"""
 	Updates the drone with Marvelmind external positioning data
 	Args:
@@ -27,7 +28,8 @@ def send_gps_data(time, q[4], x, y, z):
 		z,
 		NaN)
 
-hedge = MarvelMindHedge(tty = "/dev/ttyUSB1", adr=None, debug=False)
+#enter address value for each drone here?
+hedge = MarvelmindHedge(tty = "/dev/ttyUSB1", adr=None, debug=False)
 hedge.start()
 
 master = mavutil.mavlink_connection("/dev/ttyUSB0", baud=57600)
