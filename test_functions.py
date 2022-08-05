@@ -73,7 +73,7 @@ def main():
 	master.wait_heartbeat()
 	print("Heartbeat from system (system %u component %u)" % (master.target_system, master.target_component))
 
-	
+	master = mavutil.mavlink_connection('udpout:localhost:14550', source_system=1)
 
 	request_message_interval("GPS_RAW_INT", 1.0)
 	request_message_interval("VFR_HUD", 1.0)
@@ -88,30 +88,27 @@ def main():
 				data = hedge.position()
 				# print(data)
 				print("time: %f x: %f y: %f z: %f" % (data[5], data[1], data[2], data[3]))
+				# NEED TO CHECK IF THE NED TRANSLATION IS NEEDED HERE
 				send_vision_position_estimate_message(data[1], data[2], data[3])
 		except KeyboardInterrupt:
 			hedge.stop()
 			sys.exit()
 
-		get_requested_data('GPS_RAW_INT', 'fix_type', ' ', 'gps log')
-		get_requested_data('VFR_HUD', 'alt', 'm', 'vfr_log')
+		# get_requested_data('GPS_RAW_INT', 'fix_type', ' ', 'gps log')
+		# get_requested_data('VFR_HUD', 'alt', 'm', 'vfr_log')
 
 		time.sleep(0.1)
 
 main()
 
+"""
+setup the router so QGC and the code works
+https://github.com/mavlink-router/mavlink-router
+	monitor the shit
 
+fix the code based on marvelmind beacons
+set the flags on PX4 board - taking vision position
 
-	# request_message_interval(mavutil.mavlink.AUTOPILOT_VERSION_REQUEST, 50)
-	# request_message_interval(148, 100)
+GO FOR LOCK
 
-
-	# while True:
-	# 	msg = master.recv_match()
-	# 	if not msg:
-	# 		continue
-	# 	if msg.get_type() == 'AUTOPILOT_VERSION':
-	# 		print("\n\n*****Got message: %s*****" % msg.get_type())
-	# 		print("Message: %s" % msg)
-	# 		print("\nAs dictionary: %s" % msg.to_dict())
-	# 	time.sleep(0.1)
+"""
