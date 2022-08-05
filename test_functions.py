@@ -1,5 +1,6 @@
+from numpy import NaN
 from pymavlink import mavutil
-from marvelmind import MarvelMindHedge
+from marvelmind import MarvelmindHedge
 import sys
 
 def request_message_interval(message_id: int, frequency_hz: float):
@@ -21,7 +22,7 @@ def request_message_interval(message_id: int, frequency_hz: float):
         0, # Target address of message stream (if message has target address fields). 0: Flight-stack default (recommended), 1: address of requestor, 2: broadcast.
     )
 
-def send_gps_data(time, q[4], x, y, z):
+def send_gps_data(time, q, x, y, z):
 	"""
 	Updates the drone with Marvelmind external positioning data
 	Args:
