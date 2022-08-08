@@ -2,11 +2,46 @@ from pymavlink import mavutil
 from marvelmind import MarvelmindHedge
 import sys
 import threading
+import queue
 import time
 import numpy as np
 from numpy import NaN
 
-def send_gps_data(q, x, y, z):
+
+# Send a mavlink SET_GPS_GLOBAL_ORIGIN message (http://mavlink.org/messages/common#SET_GPS_GLOBAL_ORIGIN), which allows us to use local position information without a GPS.
+def set_default_global_origin():
+	master.mav.set_gps_global_origin_send(
+		1,
+		home_lat, 
+		home_lon,
+		home_alt
+	)
+
+def set_default_home_position():
+	x = 0
+	y = 0
+	z = 0
+	q = [1, 0, 0, 0]   # w x y z
+
+	approach_x = 0
+	approach_y = 0
+	approach_z = 1
+
+	master.mav.set_home_position_send(
+		1,
+		home_lat, 
+		home_lon,
+		home_alt,
+		x,
+		y,
+		z,
+		q,
+		approach_x,
+		approach_y,
+		approach_z
+	)
+
+def send_gps_data(cb, xyz):
 	"""
 	Updates the drone with Marvelmind external positioning data
 	Args:
@@ -25,15 +60,16 @@ def send_gps_data(q, x, y, z):
 	(states: x, y, z, roll, pitch, yaw; first six entries are the first ROW, next five 
 	entries are the second ROW, etc.). If unknown, assign NaN value to first element in the array.
 	"""
-	print("SENDING: x: %f, y: %f, z: %f, roll: %f, pitch: %f, yaw: %f" % (x, y, z, q[0], q[1], q[2]))
+	print("SENDING: x: %f, y: %f, z: %f, roll: %f, pitch: %f, yaw: %f" 
+		% (xyz[0], xyz[1], xyz[2], cb[0], cb[1], cb[2]))
 	master.mav.vision_position_estimate_send(
-		int(q[3]),
-		x,
-		y,
-		z,
-		q[0],
-		q[1],
-		q[2])
+		int(cb[3]),	
+		xyz[0],
+		xyz[1],
+		xyz[2],
+		cb[0],
+		cb[1],
+		cb[2])
 
 # Listen to attitude data to acquire heading when compass data is enabled
 def att_msg_callback(value):
@@ -43,34 +79,41 @@ def att_msg_callback(value):
 	# print("pitch %f" % (value.pitch))
 	# print("yaw %f" % (value.yaw))
 	# print("q4 %f" % (value.q4))
-	q_array[0] = value.roll
-	q_array[1] = value.pitch
-	q_array[2] = value.yaw
-	q_array[3] = value.time_boot_ms
+	cb_vals[0] = value.roll
+	cb_vals[1] = value.pitch
+	cb_vals[2] = value.yaw
+	cb_vals[3] = value.time_boot_ms
 
+def marvelmind_loop(hedge):
+	hedge.start() # start thread
+	data = np.zeros(3, dtype=float)
+	while not thread_should_exit:
+		try:
+			hedge.dataEvent.wait(1)
+			hedge.dataEvent.clear()
+			if (hedge.positionUpdated):
+				hedge.print_position()
+				pos = hedge.position()
+				#possibly need NED conversion here
+				data[0] = pos[1] #x
+				data[1] = pos[2] #y
+				data[2] = -(pos[3]) #z
+				q.put(data)
+		except KeyboardInterrupt:
+			hedge.stop()
+			sys.exit()
+	hedge.stop()
 
-
+		
 
 def mavlink_loop(master, callbacks):
-	'''a mai	# print("q1 %f" % (value.q1))
-	# print("q2 %f" % (value.q2))
-	# print("q3 %f" % (value.q3))
-	# print("q4 %f" % (value.q4))
-	# q_array[0] = value.q1
-	# q_array[1] = value.q2
-	# q_array[2] = value.q3
-	# q_array[3] = value.q4n routine for a thread; reads data from a mavlink connection,
-	calling callbacks based on message type received.
-	'''
-	xx = 0.0
-	yy = 0.0
-	zz = 0.0
 	interesting_messages = list(callbacks.keys())
 
 	time_after_loop = time.time() # initialization
-	frequency = 0.1
+	frequency = 0.30
 	# main programm
-	while not mavlink_thread_should_exit:
+	old_val = np.zeros(3, dtype=float)
+	while not thread_should_exit:
 		time_before_loop = time.time()
 		if time_before_loop - time_after_loop >= frequency:
 			real_frequency = time_before_loop - time_after_loop
@@ -78,67 +121,28 @@ def mavlink_loop(master, callbacks):
 			time_after_loop = time.time()
 		# send a heartbeat msg
 		# current_time_us = int(round(time.time() * 1000000))
-		master.mav.heartbeat_send(mavutil.mavlink.MAV_TYPE_ONBOARD_CONTROLLER,
-								mavutil.mavlink.MAV_AUTOPILOT_GENERIC,
-								0,
-								0,
-								0)
-		m = master.recv_match(type=interesting_messages, timeout=0.1, blocking=True)
+		# master.mav.heartbeat_send(mavutil.mavlink.MAV_TYPE_ONBOARD_CONTROLLER,
+		# 						mavutil.mavlink.MAV_AUTOPILOT_GENERIC,
+		# 						0,
+		# 						0,
+		# 						0)
+		m = master.recv_match(type=interesting_messages, blocking=False)
 		if m is None:
 			continue
 		callbacks[m.get_type()](m)
-		# hedge.dataEvent.wait()
-		# hedge.dataEvent.clear()
-		# try:
-		# if (hedge.positionUpdated):
-		# 	data = hedge.position()
-		# 	xx = data[1]
-		# 	yy = data[2]
-		# 	zz = data[3]
-		# except:
-			# pass
-			# print("time: %f x: %f y: %f z: %f" % (data[5], xx, yy, zz))
-		# NEED TO CHECK IF THE NED TRANSLATION IS NEEDED HERE
-		send_gps_data(q_array, xx, yy, -(zz))
-		# time.sleep(0.001)
 
-# Send a mavlink SET_GPS_GLOBAL_ORIGIN message (http://mavlink.org/messages/common#SET_GPS_GLOBAL_ORIGIN), which allows us to use local position information without a GPS.
-def set_default_global_origin():
-    master.mav.set_gps_global_origin_send(
-        1,
-        home_lat, 
-        home_lon,
-        home_alt
-    )
+		if (q.empty() == False):
+			old_val = q.get()
+		old_val[0] = 0.12
+		old_val[1] = 0.23
+		old_val[2] = 0.0
+		send_gps_data(cb_vals, old_val)
+		time.sleep(0.001)
 
-def set_default_home_position():
-    x = 0
-    y = 0
-    z = 0
-    q = [1, 0, 0, 0]   # w x y z
-
-    approach_x = 0
-    approach_y = 0
-    approach_z = 1
-
-    master.mav.set_home_position_send(
-        1,
-        home_lat, 
-        home_lon,
-        home_alt,
-        x,
-        y,
-        z,
-        q,
-        approach_x,
-        approach_y,
-        approach_z
-    )
 
 #enter address value for each drone here?
 # hedge = MarvelmindHedge(tty = "/dev/ttyACM0", adr=None, debug=False, baud=500000)
 # hedge.start()
-q_array = np.zeros(4, dtype=float)
 
 home_lat = int(52.426595 * 10000000.0)   # Somewhere random
 home_lon = int(10.786546 * 10000000.0)	# Somewhere random
@@ -156,18 +160,25 @@ mavlink_callbacks = {
 }
 
 set_default_global_origin()
-# set_default_home_position()
-mavlink_thread_should_exit = False
+set_default_home_position()
+thread_should_exit = False
+
+q = queue.Queue()
+cb_vals = np.zeros(4, dtype=float)
+
+# marvelmind_thread = threading.Thread(target=marvelmind_loop, args=(hedge))
 mavlink_thread = threading.Thread(target=mavlink_loop, args=(master, mavlink_callbacks))
+# marvelmind_thread.start()
 mavlink_thread.start()
 
+
 time.sleep(300)
-mavlink_thread_should_exit = True
+thread_should_exit = True
 print('Closing the script...')
 
-mavlink_thread_should_exit = True
+thread_should_exit = True
 mavlink_thread.join()
-
+# marvelmind_thread.join()
 
 
 
