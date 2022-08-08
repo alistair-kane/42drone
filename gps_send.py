@@ -3,6 +3,8 @@ from pymavlink import mavutil
 from marvelmind import MarvelmindHedge
 import sys
 
+
+
 def send_gps_data(time, q, x, y, z):
 	"""
 	Updates the drone with Marvelmind external positioning data
@@ -32,21 +34,39 @@ def send_gps_data(time, q, x, y, z):
 # hedge = MarvelmindHedge(tty = "/dev/ttyUSB1", adr=None, debug=False)
 # hedge.start()
 
+# Listen to attitude data to acquire heading when compass data is enabled
+def att_msg_callback(value):
+	print(value.yaw)
+
+
 master = mavutil.mavlink_connection("/dev/ttyUSB0", baud=57600)
 master.wait_heartbeat()
 print("Heartbeat from system (system %u component %u)" % (master.target_system, master.target_component))
 
 
-while True:
-	msg = master.recv_match()
-	if not msg:
-		continue
-	if msg.get_type() == 'HEARTBEAT':
-		print("\n\n*****Got message: %s*****" % msg.get_type())
-		print("Message: %s" % msg)
-		print("\nAs dictionary: %s" % msg.to_dict())
-		# Armed = MAV_STATE_STANDBY (4), Disarmed = MAV_STATE_ACTIVE (3)
-		print("\nSystem status: %s" % msg.system_status)
+mavlink_callbacks = {
+    'ATTITUDE': att_msg_callback,
+}
+
+mavlink_thread = threading.Thread(target=mavlink_loop, args=(conn, mavlink_callbacks))
+mavlink_thread.start()
+
+def mavlink_loop(conn, callbacks):
+    '''a main routine for a thread; reads data from a mavlink connection,
+    calling callbacks based on message type received.
+    '''
+    interesting_messages = list(callbacks.keys())
+    while not mavlink_thread_should_exit:
+        # send a heartbeat msg
+        conn.mav.heartbeat_send(mavutil.mavlink.MAV_TYPE_ONBOARD_CONTROLLER,
+                                mavutil.mavlink.MAV_AUTOPILOT_GENERIC,
+                                0,
+                                0,
+                                0)
+        m = conn.recv_match(type=interesting_messages, timeout=1, blocking=True)
+        if m is None:
+            continue
+        callbacks[m.get_type()](m)
 
 # while True:
 # 	try:
@@ -57,3 +77,9 @@ while True:
 # 	except KeyboardInterrupt:
 # 		hedge.stop()
 # 		sys.exit()
+
+finally:
+    progress('Closing the script...')
+
+    mavlink_thread_should_exit = True
+    mavlink_thread.join()
