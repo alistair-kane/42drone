@@ -1,9 +1,10 @@
-from numpy import NaN
 from pymavlink import mavutil
 from marvelmind import MarvelmindHedge
 import sys
-
-
+import threading
+import time
+import numpy as np
+from numpy import NaN
 
 def send_gps_data(time, q, x, y, z):
 	"""
@@ -24,62 +25,70 @@ def send_gps_data(time, q, x, y, z):
 	"""
 	master.mav.att_pos_mocap_send(
 		time,
-		q,
+		np.array([q[0], q[1], q[2], q[3]], dtype=float),
 		x,
 		y,
-		z,
-		NaN)
+		z)
 
 #enter address value for each drone here?
 # hedge = MarvelmindHedge(tty = "/dev/ttyUSB1", adr=None, debug=False)
 # hedge.start()
+time_v = 0
+q_array = np.zeros(4, dtype=float)
 
 # Listen to attitude data to acquire heading when compass data is enabled
 def att_msg_callback(value):
-	print(value.yaw)
+	print("time %d" % (value.time_boot_ms))
+	print("q1 %f" % (value.q1))
+	print("q2 %f" % (value.q2))
+	print("q3 %f" % (value.q3))
+	print("q4 %f" % (value.q4))
+	time_v = value.time_boot_ms
+	q_array[0] = value.q1
+	q_array[1] = value.q2
+	q_array[2] = value.q3
+	q_array[3] = value.q4
 
 
-master = mavutil.mavlink_connection("/dev/ttyUSB0", baud=57600)
+
+
+def mavlink_loop(conn, callbacks):
+	'''a main routine for a thread; reads data from a mavlink connection,
+	calling callbacks based on message type received.
+	'''
+	interesting_messages = list(callbacks.keys())
+	while not mavlink_thread_should_exit:
+		# send a heartbeat msg
+		conn.mav.heartbeat_send(mavutil.mavlink.MAV_TYPE_ONBOARD_CONTROLLER,
+								mavutil.mavlink.MAV_AUTOPILOT_GENERIC,
+								0,
+								0,
+								0)
+		m = conn.recv_match(type=interesting_messages, timeout=1, blocking=True)
+		if m is None:
+			continue
+		callbacks[m.get_type()](m)
+		send_gps_data(time_v, q_array, 7, 7, 0)
+		time.sleep(0.01)
+
+
+
+master = mavutil.mavlink_connection('udpin:127.0.0.1:15667', baud=57600)
+# master = mavutil.mavlink_connection("/dev/ttyUSB0", baud=57600)
 master.wait_heartbeat()
 print("Heartbeat from system (system %u component %u)" % (master.target_system, master.target_component))
 
 
 mavlink_callbacks = {
-    'ATTITUDE': att_msg_callback,
+	'ATTITUDE_QUATERNION': att_msg_callback,
 }
-
-mavlink_thread = threading.Thread(target=mavlink_loop, args=(conn, mavlink_callbacks))
+mavlink_thread_should_exit = False
+mavlink_thread = threading.Thread(target=mavlink_loop, args=(master, mavlink_callbacks))
 mavlink_thread.start()
 
-def mavlink_loop(conn, callbacks):
-    '''a main routine for a thread; reads data from a mavlink connection,
-    calling callbacks based on message type received.
-    '''
-    interesting_messages = list(callbacks.keys())
-    while not mavlink_thread_should_exit:
-        # send a heartbeat msg
-        conn.mav.heartbeat_send(mavutil.mavlink.MAV_TYPE_ONBOARD_CONTROLLER,
-                                mavutil.mavlink.MAV_AUTOPILOT_GENERIC,
-                                0,
-                                0,
-                                0)
-        m = conn.recv_match(type=interesting_messages, timeout=1, blocking=True)
-        if m is None:
-            continue
-        callbacks[m.get_type()](m)
+time.sleep(20)
+mavlink_thread_should_exit = True
+print('Closing the script...')
 
-# while True:
-# 	try:
-# 		hedge.dataEvent.wait(1)
-# 		hedge.dataEvent.clear()
-# 		if (hedge.fusionImuUpdated)
-# 			hedge.print_imu_fusion()
-# 	except KeyboardInterrupt:
-# 		hedge.stop()
-# 		sys.exit()
-
-finally:
-    progress('Closing the script...')
-
-    mavlink_thread_should_exit = True
-    mavlink_thread.join()
+mavlink_thread_should_exit = True
+mavlink_thread.join()
