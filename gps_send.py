@@ -66,7 +66,16 @@ def mavlink_loop(master, callbacks):
 	yy = 0.0
 	zz = 0.0
 	interesting_messages = list(callbacks.keys())
+
+	time_after_loop = time.time() # initialization
+	frequency = 0.1
+	# main programm
 	while not mavlink_thread_should_exit:
+		time_before_loop = time.time()
+		if time_before_loop - time_after_loop >= frequency:
+			real_frequency = time_before_loop - time_after_loop
+			print(real_frequency)
+			time_after_loop = time.time()
 		# send a heartbeat msg
 		# current_time_us = int(round(time.time() * 1000000))
 		master.mav.heartbeat_send(mavutil.mavlink.MAV_TYPE_ONBOARD_CONTROLLER,
