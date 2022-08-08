@@ -71,17 +71,54 @@ def mavlink_loop(conn, callbacks):
 		send_gps_data(time_v, q_array, 7, 7, 0)
 		time.sleep(0.01)
 
+# Send a mavlink SET_GPS_GLOBAL_ORIGIN message (http://mavlink.org/messages/common#SET_GPS_GLOBAL_ORIGIN), which allows us to use local position information without a GPS.
+def set_default_global_origin():
+    conn.mav.set_gps_global_origin_send(
+        1,
+        home_lat, 
+        home_lon,
+        home_alt
+    )
 
+def set_default_home_position():
+    x = 0
+    y = 0
+    z = 0
+    q = [1, 0, 0, 0]   # w x y z
+
+    approach_x = 0
+    approach_y = 0
+    approach_z = 1
+
+    conn.mav.set_home_position_send(
+        1,
+        home_lat, 
+        home_lon,
+        home_alt,
+        x,
+        y,
+        z,
+        q,
+        approach_x,
+        approach_y,
+        approach_z
+    )
+
+home_lat = 151269321    # Somewhere random
+home_lon = 16624301     # Somewhere random
+home_alt = 163000       # Somewhere random
 
 master = mavutil.mavlink_connection('udpin:127.0.0.1:15667', baud=57600)
 # master = mavutil.mavlink_connection("/dev/ttyUSB0", baud=57600)
 master.wait_heartbeat()
 print("Heartbeat from system (system %u component %u)" % (master.target_system, master.target_component))
 
-
 mavlink_callbacks = {
 	'ATTITUDE_QUATERNION': att_msg_callback,
 }
+
+set_default_global_origin()
+set_default_home_position()
 mavlink_thread_should_exit = False
 mavlink_thread = threading.Thread(target=mavlink_loop, args=(master, mavlink_callbacks))
 mavlink_thread.start()
