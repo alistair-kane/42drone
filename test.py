@@ -1,5 +1,5 @@
 from pymavlink import mavutil
-from marvelmind import MarvelMindHedge
+from marvelmind import MarvelmindHedge
 import time
 import sys
 
