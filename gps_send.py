@@ -24,7 +24,7 @@ def send_gps_data(time, q, x, y, z):
 	entries are the second ROW, etc.). If unknown, assign NaN value to first element in the array.
 	"""
 	master.mav.att_pos_mocap_send(
-		time,
+		current_time_us,
 		np.array([q[0], q[1], q[2], q[3]], dtype=float),
 		x,
 		y,
@@ -43,7 +43,6 @@ def att_msg_callback(value):
 	print("q2 %f" % (value.q2))
 	print("q3 %f" % (value.q3))
 	print("q4 %f" % (value.q4))
-	time_v = value.time_boot_ms
 	q_array[0] = value.q1
 	q_array[1] = value.q2
 	q_array[2] = value.q3
@@ -59,6 +58,7 @@ def mavlink_loop(conn, callbacks):
 	interesting_messages = list(callbacks.keys())
 	while not mavlink_thread_should_exit:
 		# send a heartbeat msg
+		current_time_us = int(round(time.time() * 1000000))
 		conn.mav.heartbeat_send(mavutil.mavlink.MAV_TYPE_ONBOARD_CONTROLLER,
 								mavutil.mavlink.MAV_AUTOPILOT_GENERIC,
 								0,
@@ -107,6 +107,8 @@ def set_default_home_position():
 home_lat = 151269321    # Somewhere random
 home_lon = 16624301     # Somewhere random
 home_alt = 163000       # Somewhere random
+
+current_time_us = 0
 
 master = mavutil.mavlink_connection('udpin:127.0.0.1:15667', baud=57600)
 # master = mavutil.mavlink_connection("/dev/ttyUSB0", baud=57600)
