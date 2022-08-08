@@ -59,12 +59,12 @@ def mavlink_loop(conn, callbacks):
 	while not mavlink_thread_should_exit:
 		# send a heartbeat msg
 		current_time_us = int(round(time.time() * 1000000))
-		conn.mav.heartbeat_send(mavutil.mavlink.MAV_TYPE_ONBOARD_CONTROLLER,
+		master.mav.heartbeat_send(mavutil.mavlink.MAV_TYPE_ONBOARD_CONTROLLER,
 								mavutil.mavlink.MAV_AUTOPILOT_GENERIC,
 								0,
 								0,
 								0)
-		m = conn.recv_match(type=interesting_messages, timeout=1, blocking=True)
+		m = master.recv_match(type=interesting_messages, timeout=1, blocking=True)
 		if m is None:
 			continue
 		callbacks[m.get_type()](m)
@@ -73,7 +73,7 @@ def mavlink_loop(conn, callbacks):
 
 # Send a mavlink SET_GPS_GLOBAL_ORIGIN message (http://mavlink.org/messages/common#SET_GPS_GLOBAL_ORIGIN), which allows us to use local position information without a GPS.
 def set_default_global_origin():
-    conn.mav.set_gps_global_origin_send(
+    master.mav.set_gps_global_origin_send(
         1,
         home_lat, 
         home_lon,
@@ -90,7 +90,7 @@ def set_default_home_position():
     approach_y = 0
     approach_z = 1
 
-    conn.mav.set_home_position_send(
+    master.mav.set_home_position_send(
         1,
         home_lat, 
         home_lon,
