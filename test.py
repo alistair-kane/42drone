@@ -19,7 +19,13 @@ msg = master.recv_match(type='COMMAND_ACK', blocking=True)
 print(msg)
 
 
-master.mav.command_long_send(master.target_system, master.target_component,
-                                     mavutil.mavlink.MAV_CMD_NAV_TAKEOFF, 0, 0, 0, 0, 0, 0, 0, 10)
-msg = master.recv_match(type='COMMAND_ACK', blocking=True)
+## code to request/get message https://mavlink.io/en/messages/common.html#MAV_CMD_NAV_TAKEOFF_LOCAL
+msg = the_connection.recv_match(type='ODOMETRY', blocking=True)
+if msg is None:
+	continue
 print(msg)
+
+# master.mav.command_long_send(master.target_system, master.target_component,
+#                                      mavutil.mavlink.MAV_CMD_NAV_TAKEOFF_LOCAL, 0, 0, 0, 0, 0, 0, 0, 1)
+# msg = master.recv_match(type='COMMAND_ACK', blocking=True)
+# print(msg)
